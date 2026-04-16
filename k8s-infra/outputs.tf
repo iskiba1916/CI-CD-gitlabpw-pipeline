@@ -21,6 +21,6 @@ master
 workers
 
 [k8s:vars]
-ansible_ssh_private_key_file=./moj_klucz.pem
+ansible_ssh_private_key_file=./openstack_rsa
 EOT
 }
