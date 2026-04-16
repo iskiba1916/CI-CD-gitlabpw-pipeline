@@ -1,3 +1,6 @@
 G32-openrc.sh
 G32-openrc(1).sh
 openstack_rsa
+terraform.tfstate
+.terraform/
+.terraform.lock.hcl
