@@ -1,0 +1,134 @@
+- hosts: all
+  become: yes
+  tasks:
+    - name: Load kernel modules
+      modprobe:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - br_netfilter
+        - overlay
+
+    - name: Set kernel parameters for Kubernetes
+      sysctl:
+        name: "{{ item.key }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: yes
+      loop:
+        - { key: 'net.bridge.bridge-nf-call-iptables', value: '1' }
+        - { key: 'net.bridge.bridge-nf-call-ip6tables', value: '1' }
+        - { key: 'net.ipv4.ip_forward', value: '1' }
+
+    - name: Install containerd
+      apt:
+        name: containerd
+        state: present
+        update_cache: yes
+
+    - name: Create containerd config directory
+      file:
+        path: /etc/containerd
+        state: directory
+        mode: '0755'
+
+    - name: Generate default containerd config
+      shell: containerd config default > /etc/containerd/config.toml
+      args:
+        creates: /etc/containerd/config.toml
+
+    - name: Set SystemdCgroup in containerd config
+      replace:
+        path: /etc/containerd/config.toml
+        regexp: 'SystemdCgroup = false'
+        replace: 'SystemdCgroup = true'
+
+    - name: Enable and start containerd
+      systemd:
+        name: containerd
+        state: restarted
+        enabled: yes
+
+    - name: Install dependencies
+      apt:
+        name: [apt-transport-https, ca-certificates, curl, gpg]
+        state: present
+
+    - name: Create keyrings directory
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Add Kubernetes apt signing key
+      shell: |
+        curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.29/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+      args:
+        creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+    - name: Add Kubernetes apt repository
+      apt_repository:
+        repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.29/deb/ /"
+        state: present
+        filename: kubernetes
+
+    - name: Install kubelet, kubeadm, kubectl
+      apt:
+        name: [kubelet, kubeadm, kubectl]
+        state: present
+        update_cache: yes
+
+    - name: Disable swap
+      command: swapoff -a
+      when: ansible_swaptotal_mb > 0
+
+    - name: Remove swap from fstab
+      replace:
+        path: /etc/fstab
+        regexp: '^([^#\s]+\s+[^#\s]+\s+swap\s+.*)$'
+        replace: '# \1 <- disabled by Ansible'
+- hosts: master
+  become: yes
+  tasks:
+    - name: Initialize Kubernetes control-plane
+      command: kubeadm init --pod-network-cidr=10.244.0.0/16
+      args:
+        creates: /etc/kubernetes/admin.conf
+
+    - name: Create .kube directory for ubuntu user
+      file:
+        path: /home/ubuntu/.kube
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+
+    - name: Copy admin kubeconfig
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /home/ubuntu/.kube/config
+        remote_src: yes
+        owner: ubuntu
+        group: ubuntu
+        mode: '0644'
+
+    - name: Get kubeadm join command
+      command: kubeadm token create --print-join-command
+      register: join_cmd
+
+    - name: Store join command as host fact
+      set_fact:
+        kubeadm_join_command: "{{ join_cmd.stdout }}"
+
+    - name: Install Flannel CNI
+      command: kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+      environment:
+        KUBECONFIG: /home/ubuntu/.kube/config
+      become: no
+- hosts: workers
+  become: yes
+  tasks:
+    - name: Join worker node to the cluster
+      command: "{{ hostvars[groups['master'][0]]['kubeadm_join_command'] }}"
+      args:
+        creates: /etc/kubernetes/kubelet.conf
