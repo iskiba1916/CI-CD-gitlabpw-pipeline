@@ -28,6 +28,7 @@ master
 workers
 
 [k8s:vars]
-ansible_ssh_private_key_file=./openstack_rsa
+ansible_ssh_private_key_file=~/.ssh/id_rsa
+ansible_ssh_common_args='-o StrictHostKeyChecking=no'
 EOT
 }

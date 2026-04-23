@@ -1,8 +1,8 @@
 G32-openrc.sh
 G32-openrc(1).sh
 openstack_rsa
-terraform.tfstate
+*.tfstate*
 .terraform/
 .terraform.lock.hcl
 openrc.ps1
-C:\Users\iskib\Documents\Studia\26L\PLAST\WARSZTATY\W3\workshop3\openrc.ps1
+ansible/inventory.ini

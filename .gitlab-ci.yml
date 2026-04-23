@@ -16,6 +16,7 @@ stages:
   - validate
   - plan
   - apply
+  - configure
 
 validate:
   stage: validate
@@ -39,8 +40,31 @@ apply:
   stage: apply
   script:
     - gitlab-terraform apply
+    - gitlab-terraform output -raw ansible_inventory >
+      ${CI_PROJECT_DIR}/ansible/inventory.ini
+  artifacts:
+    paths:
+      - ${CI_PROJECT_DIR}/ansible/inventory.ini
   dependencies:
     - plan
+  when: manual
+  only:
+    - main
+
+configure:
+  stage: configure
+  image: willhallonline/ansible:2.16-ubuntu-22.04
+  before_script:
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+  script:
+    - cd ${CI_PROJECT_DIR}/ansible
+    - export ANSIBLE_HOST_KEY_CHECKING=False
+    - ansible-playbook -i inventory.ini site.yml
+  dependencies:
+    - apply
   when: manual
   only:
     - main
