@@ -6,11 +6,11 @@
 #   Network → Security Groups → your security group name
 #   Network → Networks        → external/public network ID
 
-worker_count         = 2
-image_name           = "Ubuntu 24.04 LTS"
-flavor_worker        = "plast.worker"
-flavor_master        = "plast.master"
-keypair_name         = "plast1"
-network_name         = "plast-network"
-security_group_name  = "default"
-external_network_name  = "public1"
+worker_count          = 1
+image_name            = "Ubuntu 24.04 LTS"
+flavor_worker         = "plast.worker"
+flavor_master         = "plast.master"
+keypair_name          = "plast1"
+network_name          = "plast-network"
+security_group_name   = "default"
+external_network_name = "public1"
